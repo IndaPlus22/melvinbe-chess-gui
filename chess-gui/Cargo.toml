@@ -1,0 +1,11 @@
+[package]
+name = "chess-gui"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+jblomlof-chess = { git = "https://github.com/IndaPlus22/jblomlof-chess" } 
+linked-hash-map = "0.5.4" 
+ggez = "0.6.1"
