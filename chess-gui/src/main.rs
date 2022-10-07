@@ -4,9 +4,9 @@ use ggez::{conf, event, graphics, Context, ContextBuilder, GameError, GameResult
 use std::{collections::HashMap, env, path};
 
 /// A chess board is 8x8 tiles.
-const GRID_SIZE: i16 = 8;
+const GRID_SIZE: i16 = 10;
 /// Sutible size of each tile.
-const GRID_CELL_SIZE: (i16, i16) = (135, 135);
+const GRID_CELL_SIZE: (i16, i16) = (32 * 4, 32 * 4);
 
 /// Size of the application window.
 const SCREEN_SIZE: (f32, f32) = 
@@ -65,7 +65,8 @@ impl AppState
             ('R', "/white_rook.png".to_string()),
             ('P', "/white_pawn.png".to_string()),
             ('B', "/white_bishop.png".to_string()),
-            ('N', "/white_knight.png".to_string())
+            ('N', "/white_knight.png".to_string()),
+            ('s', "/shadow.png".to_string())
         ]
             .iter()
             .map(|(piece, path)| 
@@ -108,8 +109,7 @@ impl event::EventHandler<GameError> for AppState
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult 
     {
-        // clear interface with gray background colour
-        graphics::clear(ctx, [0.5, 0.5, 0.5, 1.0].into());
+        graphics::clear(ctx, [0.27, 0.20, 0.24, 1.0].into());
 
         // create text representation
         let state_text = graphics::Text::new
@@ -151,8 +151,8 @@ impl event::EventHandler<GameError> for AppState
                     graphics::DrawMode::fill(),
                     graphics::Rect::new_i32
                     (
-                        col * GRID_CELL_SIZE.0 as i32,
-                        row * GRID_CELL_SIZE.1 as i32,
+                        (col + 1) * GRID_CELL_SIZE.0 as i32,
+                        (row + 1) * GRID_CELL_SIZE.1 as i32,
                         GRID_CELL_SIZE.0 as i32,
                         GRID_CELL_SIZE.1 as i32,
                     ),
@@ -192,8 +192,8 @@ impl event::EventHandler<GameError> for AppState
                 graphics::DrawMode::fill(),
                 graphics::Rect::new_i32
                 (
-                    highlight.0 as i32 * GRID_CELL_SIZE.0 as i32,
-                    highlight.1 as i32 * GRID_CELL_SIZE.1 as i32,
+                    (highlight.0 + 1) as i32 * GRID_CELL_SIZE.0 as i32,
+                    (highlight.1 + 1) as i32 * GRID_CELL_SIZE.1 as i32,
                     GRID_CELL_SIZE.0 as i32,
                     GRID_CELL_SIZE.1 as i32,
                 ),
@@ -219,13 +219,26 @@ impl event::EventHandler<GameError> for AppState
                 graphics::draw
                 (
                     ctx,
-                    self.sprites.get(&c).unwrap(),
+                    self.sprites.get(&'s').unwrap(),
                     graphics::DrawParam::default()
-                        .scale([3.0, 3.0]) // Tile size is 90 pixels, while image sizes are 45 pixels.
+                        .scale([4.0, 4.0]) 
                         .dest
                         ([
-                            x as f32 * GRID_CELL_SIZE.0 as f32,
-                            y as f32 * GRID_CELL_SIZE.1 as f32,
+                            (x + 1) as f32 * GRID_CELL_SIZE.0 as f32,
+                            (y + 1) as f32 * GRID_CELL_SIZE.1 as f32,
+                        ]),
+                )
+                .expect("Failed to draw shadow.");
+                graphics::draw
+                (
+                    ctx,
+                    self.sprites.get(&c).unwrap(),
+                    graphics::DrawParam::default()
+                        .scale([4.0, 4.0]) 
+                        .dest
+                        ([
+                            (x + 1) as f32 * GRID_CELL_SIZE.0 as f32,
+                            ((y + 1) as f32 * GRID_CELL_SIZE.1 as f32) - 14.0 * 4.0,
                         ]),
                 )
                 .expect("Failed to draw piece.");
@@ -239,10 +252,10 @@ impl event::EventHandler<GameError> for AppState
             ctx,
             &state_text,
             graphics::DrawParam::default()
-                .color([0.0, 0.0, 0.0, 1.0].into())
+                .color([1.0, 0.95, 0.85, 1.0].into())
                 .dest(ggez::mint::Point2 {
                     x: (SCREEN_SIZE.0 - text_dimensions.w as f32) / 2f32 as f32,
-                    y: (SCREEN_SIZE.0 - text_dimensions.h as f32) / 2f32 as f32,
+                    y: (28.0 as f32) / 2f32 as f32,
                 }),
         )
         .expect("Failed to draw text.");
@@ -265,8 +278,57 @@ impl event::EventHandler<GameError> for AppState
     {
         if button == event::MouseButton::Left 
         {
-            let square = ((x / GRID_CELL_SIZE.0 as f32) as u32, (y / GRID_CELL_SIZE.1 as f32) as u32);
+            let anySquare = (x / GRID_CELL_SIZE.0 as f32, y / GRID_CELL_SIZE.1 as f32);
+            if anySquare.0 <= 0.0 || anySquare.0 >= 9.0 || anySquare.1 <= 0.0 || anySquare.1 >= 9.0 { return; };
 
+            let square = ((anySquare.0 - 1.0) as u32, (anySquare.1 - 1.0) as u32);
+
+            for i in 0..self.possibleMoves.len()
+            {
+                let mv = self.possibleMoves[i];
+                if mv.0 == square.0 && mv.1 == square.1
+                {
+                    self.game.make_move
+                    (
+                        &transform_back(self.selectedPiece.unwrap().0, self.selectedPiece.unwrap().1),
+                        &transform_back(square.0, square.1)
+                    );
+                    self.selectedPiece = None;
+                    self.possibleMoves.clear();
+                    return;
+                }
+            }
+
+            let clickedPiece: char = self.game.get_board().as_bytes()[(square.0 + (7 - square.1) * 9) as usize] as char;
+
+            //println!("{}", clickedPiece);
+
+            if clickedPiece == '*'
+            {
+                self.selectedPiece = None;
+                self.possibleMoves.clear();
+                return;
+            }
+
+            if clickedPiece.is_uppercase()
+            {
+                if !self.game.is_white_turn()
+                { 
+                    self.selectedPiece = None;
+                    self.possibleMoves.clear();
+                    return; 
+                }
+            }
+            else 
+            {
+                if self.game.is_white_turn()
+                { 
+                    self.selectedPiece = None;
+                    self.possibleMoves.clear();
+                    return; 
+                }
+            }
+            
             if self.selectedPiece.is_some()
             {
                 if self.selectedPiece.unwrap().0 == square.0 && self.selectedPiece.unwrap().1 == square.1 
@@ -275,40 +337,19 @@ impl event::EventHandler<GameError> for AppState
                     self.possibleMoves.clear();
                     return;
                 }
-                else
-                {
-                    for i in 0..self.possibleMoves.len()
-                    {
-                        let mv = self.possibleMoves[i];
-                        if mv.0 == square.0 && mv.1 == square.1
-                        {
-                            self.game.make_move
-                            (
-                                &transform_back(self.selectedPiece.unwrap().0, self.selectedPiece.unwrap().1),
-                                &transform_back(square.0, square.1)
-                            );
-                            self.selectedPiece = None;
-                            self.possibleMoves.clear();
-                            return;
-                        }
-                    }
-                    self.selectedPiece = None;
-                }
             }
-            else
+
+            self.selectedPiece = Some(square);
+
+            self.possibleMoves.clear();
+
+            let moves = self.game.get_possible_moves(&transform_back(square.0, square.1));
+            if moves.is_some()
             {
-                self.selectedPiece = Some(square);
-
-                self.possibleMoves.clear();
-
-                let moves = self.game.get_possible_moves(&transform_back(square.0, square.1));
-                if moves.is_some()
+                let m = moves.unwrap();
+                for i in m
                 {
-                    let m = moves.unwrap();
-                    for i in m
-                    {
-                        self.possibleMoves.push(transform_input(&i));
-                    }
+                    self.possibleMoves.push(transform_input(&i));
                 }
             }
         }
@@ -324,7 +365,7 @@ pub fn main() -> GameResult
         .window_setup
         (
             conf::WindowSetup::default()
-                .title("Schack") // Set window title "Schack"
+                .title("Schack med gulliga svampar") // Set window title "Schack"
                 .icon("/icon.png"), // Set application icon
         )
         .window_mode
@@ -334,6 +375,8 @@ pub fn main() -> GameResult
                 .resizable(false), // Fixate window size
         );
     let (mut contex, mut event_loop) = context_builder.build().expect("Failed to build context.");
+
+    graphics::set_default_filter(&mut contex, graphics::FilterMode::Nearest);
 
     let state = AppState::new(&mut contex).expect("Failed to create state.");
     event::run(contex, event_loop, state) // Run window event loop
